@@ -19,15 +19,17 @@ COLORS = {
     'grey'  : np.array([100, 100, 100])
 }
 
-ambient_temp = 10
-temp_range = np.arange(-30, 30, 1)
-
-colors = list(Color("blue").range_to(Color("red"), len(temp_range)))
-temps = dict(zip(temp_range, [np.array(color.rgb) * 255 for color in colors]))
-# COLORS = {**COLORS, **temps}
-COLORS = temps
-COLOR_TO_IDX = dict(zip(temp_range, temp_range))
 COLOR_NAMES = sorted(list(COLORS.keys()))
+
+# Used to map colors to integers
+COLOR_TO_IDX = {
+    'red'   : 0,
+    'green' : 1,
+    'blue'  : 2,
+    'purple': 3,
+    'yellow': 4,
+    'grey'  : 5
+}
 
 IDX_TO_COLOR = dict(zip(COLOR_TO_IDX.values(), COLOR_TO_IDX.keys()))
 
@@ -60,17 +62,23 @@ DIR_TO_VEC = [
     np.array((0, -1)),
 ]
 
+# Map of temperatures to RGB values
+temp_range = np.arange(-30, 31, 1)
+colors = list(Color("blue").range_to(Color("red"), len(temp_range)))
+TEMPERATURES = dict(zip(temp_range, [np.array(c.rgb) * 255 for c in colors]))
+
 
 class WorldObj:
     """
     Base class for grid world objects
     """
     
-    def __init__(self, type, color):
+    def __init__(self, type, color, temperature: float = None):
         assert type in OBJECT_TO_IDX, type
         assert color in COLOR_TO_IDX, color
         self.type = type
         self.color = color
+        self.temperature = temperature
         self.contains = None
         
         # Initial position of the object
@@ -99,20 +107,21 @@ class WorldObj:
         """Method to trigger/toggle an action this object performs"""
         return False
     
-    def render(self, r):
+    def render(self, r, *args, **kwargs):
         """Draw this object with the given renderer"""
         raise NotImplementedError
     
-    def _set_color(self, r):
+    def _set_color(self, r, temperature: bool = False):
         """Set the color of this object as the active drawing color"""
-        c = COLORS[self.color]
+        c = TEMPERATURES[self.temperature] if temperature else COLORS[
+            self.color]
         r.setLineColor(c[0], c[1], c[2])
         r.setColor(c[0], c[1], c[2])
 
 
 class Goal(WorldObj):
     def __init__(self):
-        super().__init__('goal', ambient_temp)
+        super().__init__('goal', 'green')
     
     def can_overlap(self):
         return True
@@ -132,17 +141,17 @@ class Floor(WorldObj):
     Colored floor tile the agent can walk over
     """
     
-    def __init__(self, color='blue'):
-        super().__init__('floor', color)
+    def __init__(self, color='black', temperature=20):
+        super().__init__('floor', color, temperature)
     
     def can_overlap(self):
         return True
     
-    def render(self, r):
+    def render(self, r, temperature: bool = False):
         # Give the floor a pale color
-        c = COLORS[self.color]
-        r.setLineColor(100, 100, 100, 0)
-        r.setColor(*c / 2)
+        c = TEMPERATURES[self.temperature] if temperature else COLORS[self.color]
+        # r.setLineColor(100, 100, 100, 0)
+        r.setColor(*c)
         r.drawPolygon([
             (1, CELL_PIXELS),
             (CELL_PIXELS, CELL_PIXELS),
@@ -198,14 +207,14 @@ class Lava(WorldObj):
 
 
 class Wall(WorldObj):
-    def __init__(self, color=ambient_temp):
+    def __init__(self, color='grey'):
         super().__init__('wall', color)
     
     def see_behind(self):
         return False
     
-    def render(self, r):
-        self._set_color(r)
+    def render(self, r, temperature: bool = False):
+        self._set_color(r, temperature)
         r.drawPolygon([
             (0, CELL_PIXELS),
             (CELL_PIXELS, CELL_PIXELS),
@@ -281,7 +290,7 @@ class Door(WorldObj):
 
 
 class Key(WorldObj):
-    def __init__(self, color=ambient_temp):
+    def __init__(self, color='red'):
         super(Key, self).__init__('key', color)
     
     def can_pickup(self):
@@ -325,8 +334,8 @@ class Ball(WorldObj):
     def can_pickup(self):
         return True
     
-    def render(self, r):
-        self._set_color(r)
+    def render(self, r, temperature: bool = False):
+        self._set_color(r, temperature)
         r.drawCircle(CELL_PIXELS * 0.5, CELL_PIXELS * 0.5, 10)
 
 
@@ -471,7 +480,7 @@ class Grid:
         
         return grid
     
-    def render(self, r, tile_size):
+    def render(self, r, tile_size, temperature: bool = False):
         """
         Render this grid at a given scale
         :param r: target renderer object
@@ -517,7 +526,7 @@ class Grid:
                     continue
                 r.push()
                 r.translate(i * CELL_PIXELS, j * CELL_PIXELS)
-                cell.render(r)
+                cell.render(r, temperature)
                 r.pop()
         
         r.pop()
@@ -1270,7 +1279,7 @@ class MiniGridEnv(gym.Env):
         
         return r.getPixmap()
     
-    def render(self, mode='human', close=False, highlight=True):
+    def render(self, mode='human', close=False, highlight=False, temperature=False):
         """
         Render the whole-grid human view
         """
@@ -1296,24 +1305,8 @@ class MiniGridEnv(gym.Env):
         r.beginFrame()
         
         # Render the whole grid
-        self.grid.render(r, CELL_PIXELS)
+        self.grid.render(r, CELL_PIXELS, temperature)
 
-        # # Draw the agent
-        # r.push()
-        # r.translate(
-        #     CELL_PIXELS * (self.agent_pos[0] + 0.5),
-        #     CELL_PIXELS * (self.agent_pos[1] + 0.5)
-        # )
-        # r.rotate(self.agent_dir * 90)
-        # r.setLineColor(255, 0, 0)
-        # r.setColor(255, 0, 0)
-        # r.drawPolygon([
-        #     (-12, 10),
-        #     (12, 0),
-        #     (-12, -10)
-        # ])
-        # r.pop()
-        
         # Compute which cells are visible to the agent
         _, vis_mask = self.gen_obs_grid()
         

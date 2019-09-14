@@ -1,9 +1,10 @@
-from typing import Tuple, List
 from datetime import datetime, timedelta
+from typing import Tuple, List
+
 import numpy as np
 
-from gym_minigrid.envs.empty import MiniGridEnv
-from gym_minigrid.minigrid import WorldObj, CELL_PIXELS, Grid
+from gym_minigrid.envs.empty import MiniGridEnv, OBJECT_TO_IDX, COLOR_TO_IDX, TEMPERATURES, COLORS
+from gym_minigrid.minigrid import WorldObj, CELL_PIXELS, Grid, Floor
 
 xy_coord = Tuple[int, int]
 RoomType = ['Kitchen', 'Bathroom', 'Bedroom', 'LivingRoom', 'Outside']
@@ -12,13 +13,11 @@ RoomType = ['Kitchen', 'Bathroom', 'Bedroom', 'LivingRoom', 'Outside']
 class Homie(WorldObj):
     
     def __init__(self,
-                 initial_room: RoomType = 'Kitchen',
-                 color: int = -30,
-                 ):
-        super(Homie, self).__init__('ball', color)
+                 initial_room: RoomType = 'Kitchen'):
+        super(Homie, self).__init__('ball', color='blue')
         self.current_room = initial_room
         self.cur_pos = self._place_within_the_room()
-        
+    
     def _place_within_the_room(self) -> xy_coord:
         current_room = House.rooms[self.current_room]
         return current_room[np.random.randint(0, len(current_room) - 1)]
@@ -39,25 +38,65 @@ class Homie(WorldObj):
             raise ValueError('Undefined room type')
         
         return temp
-
+    
     def step(self, timestamp: datetime) -> RoomType:
         self.current_room = 'LivingRoom'
         self.cur_pos = self._place_within_the_room()
     
-    def render(self, r):
-        self._set_color(r)
-        r.drawCircle(CELL_PIXELS * 0.5, CELL_PIXELS * 0.5, 10)
-        
-        
+    def render(self, r, temperature: bool = False):
+        if not temperature:
+            self._set_color(r, temperature)
+            r.drawCircle(CELL_PIXELS * 0.5, CELL_PIXELS * 0.5, 10)
+        else:
+            c = TEMPERATURES[self.temperature] if temperature else COLORS[
+                self.color]
+            r.setColor(*c)
+            r.drawPolygon([
+                (1, CELL_PIXELS),
+                (CELL_PIXELS, CELL_PIXELS),
+                (CELL_PIXELS, 1),
+                (1, 1)
+            ])
+
+
 class HouseGrid(Grid):
     """
     A grid-world house with tenants and temperatures for each cell
     """
-    pass
     
+    def encode(self, vis_mask=None):
+        """
+        Produce a compact numpy encoding of the grid
+        """
+        
+        if vis_mask is None:
+            vis_mask = np.ones((self.width, self.height), dtype=bool)
+        
+        array = np.zeros((self.width, self.height, 3), dtype='int8')
+        for i in range(self.width):
+            for j in range(self.height):
+                if vis_mask[i, j]:
+                    v = self.get(i, j)
+                    if v is None:
+                        assert ValueError
+                        array[i, j, 0] = OBJECT_TO_IDX['empty']
+                        array[i, j, 1] = 0
+                        array[i, j, 2] = 0
+                    else:
+                        array[i, j, 0] = OBJECT_TO_IDX[v.type]
+                        array[i, j, 1] = COLOR_TO_IDX[v.color]
+                        array[i, j, 2] = v.temperature
+        
+        return array
+
+
+class HeatingTile(Floor):
+    
+    def __init__(self, color='blue', temperature=20):
+        super().__init__(color, temperature)
+
 
 class House(MiniGridEnv):
-    
     # TODO(Vlad): use multirooms instead with the name for each room
     # A mapping from coordinates to rooms
     cells_to_rooms = {
@@ -66,19 +105,21 @@ class House(MiniGridEnv):
         (1, 3): 'LivingRoom',
     }
     rooms = {
-        'Kitchen': [(2, 3), (3, 3)],
-        'Bathroom': [(2, 1), (2, 2)],
-        'Bedroom': [(3, 1), (3, 2)],
+        'Kitchen'   : [(2, 3), (3, 3)],
+        'Bathroom'  : [(2, 1), (2, 2)],
+        'Bedroom'   : [(3, 1), (3, 2)],
         'LivingRoom': [(1, 1), (1, 2), (1, 3)]
     }
     
     def __init__(
         self,
+        temperatures: np.ndarray,
         size: int = 5,
         start_dt: datetime = datetime.now(),
         dt_delta: timedelta = timedelta(minutes=1),
         homies: List[Homie] = None,
     ):
+        self.temperatures = temperatures
         self.homies = homies
         self.current_dt = start_dt
         self.timedelta = dt_delta
@@ -87,10 +128,12 @@ class House(MiniGridEnv):
             max_steps=1000,
             see_through_walls=True,
         )
-        
+    
     def _gen_grid(self, width, height):
+        assert width == height
+        
         # Create an empty grid
-        self.grid = Grid(width, height)
+        self.grid = HouseGrid(width, height)
         
         # Generate walls
         self.grid.wall_rect(0, 0, width, height)
@@ -100,13 +143,28 @@ class House(MiniGridEnv):
             self.grid.set(*homie.cur_pos, v=homie)
         
         self.place_agent()
-
+        
+        # Place the heating tiles in the house
+        for i, cell in enumerate(self.grid.grid):
+            x, y = divmod(i, width)
+            if cell is None:
+                self.grid.grid[i] = HeatingTile(
+                    temperature=self.temperatures[x, y]
+                )
+            self.grid.grid[i].temperature = self.temperatures[x, y]
+        
         self.mission = "it's getting hot in here"
-
+    
+    def change_temperature(self, heatmap: np.ndarray):
+        """ Changes the temperature of each object in the house """
+        assert heatmap.shape == self.grid.height, self.grid.width
+        for obj, temp in zip(self.grid.grid, heatmap.flatten()):
+            obj.color = temp
+    
     def step(self, action):
         self.current_dt += self.timedelta
         self.step_count += 1
-    
+        
         reward = 0
         done = False
         
@@ -121,11 +179,10 @@ class House(MiniGridEnv):
         
         if self.step_count >= self.max_steps:
             done = True
-    
+        
         obs = self.gen_obs()
-
+        
         # Remove the agent from the observation
-        self.grid
         obs['image'][:, :, 0][obs['image'][:, :, 0] == 10] = 1
-    
+        
         return obs, reward, done, {}
