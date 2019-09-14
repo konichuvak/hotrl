@@ -1,121 +1,62 @@
 import numpy as np
 
-def step(temperatures: np.ndarray,
-         heat_inputs: np.ndarray,
-         conductivities: np.ndarray, # /thickness *area *time so units = J/deg
-         capacities: np.ndarray, # *mass so units = J/deg
-         outside: np.ndarray,
-         ):
-    # check all outer borders are constant temperatures
-    assert (outside[:1, :] == 1).all()
-    assert (outside[-2:, :] == 1).all()
-    assert (outside[:, :1] == 1).all()
-    assert (outside[:, -2:] == 1).all()
+class SimpleModel:
+    def __init__(self,
+                 RSI: float = 4.2,
+                 wall_height: float = 3.0,
+                 wall_width: float = 10,
+                 air_capacity: float = 1005,
+                 air_density: float = 1.204,
+                 timestep: int = 60,
+                 ):
+        """
+        source for RSI:
+        https://www.nrcan.gc.ca/sites/www.nrcan.gc.ca/files/energy/pdf/housing/Keeping-the-Heat-In_e.pdf
+        (p15, Table 2-1)
 
-    # calculate temperature difference (dT) between two grid cells separated by a grid cell
-    dT_y = temperatures[:, 2:] - temperatures[:, :-2]
-    dT_x = temperatures[2:, :] - temperatures[:-2, :]
-    """
-    <--dT1-- 
-       <--dT2--
-          <--dT3--
-             <--dT4--
-    [ ][ ][ ][ ][ ][ ]
-    +Q1
-       +Q2
-          -Q1
-          +Q3
-             -Q2
-             +Q4
-                -Q3         
-                   -Q4      where Q_n = f(dT_n)
-    """
+        Good explanation of RSI:
+        https://dothemath.ucsd.edu/2012/11/this-thermal-house/
+        """
+        wall_area = wall_width * wall_height
+        self.A_over_RSI = wall_area / RSI
+        room_mass = wall_area * wall_width * air_density
+        self.air_capacity = air_capacity * room_mass
+        assert(timestep <= 60), "timestep should be <= 60s to better " \
+                                "approximate heat transfer..."
+        self.timestep = timestep
 
-    # calculate heat flows in and out of cells
-    Q_y = conductivities[:,1:-1] * dT_y
-    Q_x = conductivities[1:-1, :] * dT_x
+    def step(self, temperatures: np.ndarray, heat: np.ndarray):
+        dT_y = temperatures[:, 1:] - temperatures[:, :-1]
+        dT_x = temperatures[1:, :] - temperatures[:-1, :]
 
-    heat_inputs[:, :-2] += Q_y
-    heat_inputs[:, 2:] -= Q_y
-    heat_inputs[:-2, :] += Q_x
-    heat_inputs[2:, :] -= Q_x
+        heat_flow_y = dT_y * self.A_over_RSI * self.timestep
+        heat_flow_x = dT_x * self.A_over_RSI * self.timestep
 
-    # calculate temperature changes due to heat flows
-    i = outside == 0
-    temperatures[i] += heat_inputs[i]/capacities[i]
+        heat[:, 1:] -= heat_flow_y
+        heat[1:, :] -= heat_flow_x
+        heat[:, :-1] += heat_flow_y
+        heat[:-1, :] += heat_flow_x
 
-    return temperatures
-
+        temperatures[1:-1, 1:-1] += heat[1:-1, 1:-1] / self.air_capacity
+        heat *= 0
+        return temperatures
 
 if __name__ == '__main__':
-    room_shape = (8,10)
-    start_temp = 25
-    outside_temp = 15
-    num_steps = 10
+    house_shape = (10,5)
+    T_start = 25
+    T_out = 0
 
-    print("initializing temperatures...")
-    temperatures = start_temp*np.ones(room_shape)
-    print(temperatures)
+    wall_mask = np.ones(house_shape)
+    wall_mask[1:-1, 1:-1] = 0
 
-    print("initializing outside mask")
-    outside = np.zeros(room_shape)
-    outside[:, :2] = 1
-    outside[:, -2:] = 1
-    outside[:2, :] = 1
-    outside[-2:, :] = 1
-    print(outside)
+    temperatures = np.ones(house_shape) * T_start
+    temperatures[wall_mask==1] = T_out
 
-    print("updating outside temperatures...")
-    temperatures[outside == 1] = outside_temp
-    print(temperatures)
+    heat = np.zeros(house_shape)
 
-    print("initializing conductivities...")
-    # https://www.engineeringtoolbox.com/thermal-conductivity-d_429.html
-    timestep = 3600 # units: s
-    air_thickness = 1 # units: m
-    wall_thickness = 0.5 # units: m
-    air_conductivity = 25/1000 # J/(m s)
-    wall_conductivity = 0.5 # J/(m s)
-
-    air_conductivity *= air_thickness
-    air_conductivity *= timestep
-    wall_conductivity *= wall_thickness
-    wall_conductivity *= timestep
-
-    conductivities = np.ones(room_shape) * air_conductivity
-    conductivities[2,2:-2] = wall_conductivity
-    conductivities[-3,2:-2] = wall_conductivity
-    conductivities[2:-3,2] = wall_conductivity
-    conductivities[2:-3, -3] = wall_conductivity
-    print(conductivities)
-
-    print("initializing capacities...")
-    # https://www.engineeringtoolbox.com/specific-heat-capacity-d_391.html
-    # https://www.engineeringtoolbox.com/air-density-specific-weight-d_600.html
-    # https://www.engineeringtoolbox.com/bricks-density-d_1777.html
-    height = 2.5 # units: m
-    air_density = 1.204 # units: kg/m3
-    wall_density = 1500  # units: m
-    air_mass = air_thickness**2 * height * air_density  # units: kg
-    wall_mass = wall_thickness * air_thickness * height * wall_density  # units: kg
-    air_capacity = 1005  # J/(kg deg)
-    wall_capacity = 850  # J/(kg deg)
-
-    air_capacity *= air_mass
-    wall_capacity *= wall_mass
-
-    capacities = np.ones(room_shape) * air_capacity
-    capacities[2, 2:-2] = wall_capacity
-    capacities[-3, 2:-2] = wall_capacity
-    capacities[2:-3, 2] = wall_capacity
-    capacities[2:-3, -3] = wall_capacity
-    print(capacities)
-
-    print("initializing heat inputs...")
-    heat_inputs = np.zeros(room_shape)
-
-    np.set_printoptions(precision=0)
-    for _ in range(num_steps):
+    sm = SimpleModel()
+    for _ in range(1000):
         print(temperatures)
-        temperatures = step(temperatures, heat_inputs, conductivities, capacities, outside)
-        heat_inputs *= 0
+        temperatures = sm.step(temperatures, heat)
+
+
