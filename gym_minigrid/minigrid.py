@@ -249,8 +249,8 @@ class Door(WorldObj):
         self.is_open = not self.is_open
         return True
     
-    def render(self, r):
-        c = COLORS[self.color]
+    def render(self, r, temperature:bool = False):
+        c = TEMPERATURES[self.temperature] if temperature else COLORS[self.color]
         r.setLineColor(c[0], c[1], c[2])
         r.setColor(c[0], c[1], c[2], 50 if self.is_locked else 0)
         

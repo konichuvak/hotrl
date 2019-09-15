@@ -52,7 +52,7 @@ class SimpleModel:
 
 class RoomModel:
     def __init__(self,
-                 RSI: float = 4.2,
+                 RSI: float = 4.2 * 50,
                  wall_height: float = 2.5, # m
                  wall_width: float = 1, # m
                  air_capacity: float = 1005, # J/(kg deg)

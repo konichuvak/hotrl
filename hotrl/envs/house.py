@@ -347,8 +347,8 @@ class MultiRoomHouse(MiniGridEnv):
     """
 
     def __init__(self,
-                 t_out : float = 5,
-                 t_start: float = 15,
+                 t_out : float = -20,
+                 t_start: float = 20,
                  start_dt: datetime = datetime.now(),
                  dt_delta: timedelta = timedelta(minutes=1),
                  homies: List[Homie] = None,
