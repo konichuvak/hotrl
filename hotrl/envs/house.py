@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, time
 from typing import Tuple, List
 
 import numpy as np
@@ -10,6 +10,12 @@ from hotrl.heat_transfer.model import SimpleModel
 
 xy_coord = Tuple[int, int]
 RoomType = ['Kitchen', 'Bathroom', 'Bedroom', 'LivingRoom', 'Outside']
+
+
+class HeatingTile(Floor):
+    
+    def __init__(self, color='blue', temperature=20):
+        super().__init__(color, temperature)
 
 
 class Homie(WorldObj):
@@ -42,7 +48,41 @@ class Homie(WorldObj):
         return temp
     
     def step(self, timestamp: datetime) -> RoomType:
-        self.current_room = 'LivingRoom'
+        date = dict(
+            year=timestamp.year,
+            month=timestamp.month,
+            day=timestamp.day
+        )
+        prev_date = timestamp - timedelta(days=1)
+        prev_date = dict(
+            year=prev_date.year,
+            month=prev_date.month,
+            day=prev_date.day
+        )
+        
+        sleep = datetime(**dict(**prev_date, hour=22))
+        morning_bath = datetime(**dict(**date, hour=7))
+        breakfast = datetime(**dict(**date, hour=7, minute=30))
+        leave_for_work = datetime(**dict(**date, hour=8))
+        dinner = datetime(**dict(**date, hour=18))
+        study = datetime(**dict(**date, hour=19))
+        evening_bath = datetime(**dict(**date, hour=21, minute=30))
+        
+        if sleep <= timestamp < morning_bath:
+            self.current_room = 'Bedroom'
+        elif morning_bath <= timestamp < breakfast:
+            self.current_room = 'Bathroom'
+        elif breakfast <= timestamp < leave_for_work:
+            self.current_room = 'Kitchen'
+        elif leave_for_work <= timestamp < dinner:
+            self.current_room = 'Outside'
+        elif dinner <= timestamp < study:
+            self.current_room = 'Kitchen'
+        elif study <= evening_bath < evening_bath:
+            self.current_room = 'LivingRoom'
+        elif evening_bath <= evening_bath < sleep:
+            self.current_room = 'Bathroom'
+            
         self.cur_pos = self._place_within_the_room()
     
     def render(self, r, temperature: bool = False):
@@ -92,12 +132,6 @@ class HouseGrid(Grid):
         return array
 
 
-class HeatingTile(Floor):
-    
-    def __init__(self, color='blue', temperature=20):
-        super().__init__(color, temperature)
-
-
 class House(MiniGridEnv):
     # TODO(Vlad): use multirooms instead with the name for each room
     # A mapping from coordinates to rooms
@@ -110,7 +144,8 @@ class House(MiniGridEnv):
         'Kitchen'   : [(2, 3), (3, 3)],
         'Bathroom'  : [(2, 1), (2, 2)],
         'Bedroom'   : [(3, 1), (3, 2)],
-        'LivingRoom': [(1, 1), (1, 2), (1, 3)]
+        'LivingRoom': [(1, 1), (1, 2), (1, 3)],
+        'Outside': [(0, 0)],
     }
     
     def __init__(
@@ -158,11 +193,17 @@ class House(MiniGridEnv):
         
         self.mission = "it's getting hot in here"
     
-    def change_temperature(self, heatmap: np.ndarray):
+    def change_temperature(self, heatmap: np.ndarray = None):
         """ Changes the temperature of each object in the house """
-        assert heatmap.shape == self.grid.height, self.grid.width
-        for obj, temp in zip(self.grid.grid, heatmap.flatten()):
-            obj.color = temp
+        if heatmap is None:
+            heatmap = np.zeros(self.temperatures.shape, dtype=float)
+        self.temperatures = self.model.step(
+            temperatures=self.temperatures,
+            heat=heatmap
+        )
+        for i, cell in enumerate(self.grid.grid):
+            x, y = divmod(i, self.grid.width)
+            self.grid.grid[i].temperature = self.temperatures[x, y]
     
     def step(self, action):
         self.current_dt += self.timedelta
@@ -176,12 +217,11 @@ class House(MiniGridEnv):
         for homie in self.homies:
             homie.step(timestamp=self.current_dt)
             rewards[homie] = homie.get_preferred_temperature(self.current_dt)
-        
+        print(self.current_dt, rewards, homie.current_room)
+
         # Adjust the temperature in the house wrt to the preferences of homies
-        self.temperatures = self.model.step(self.temperatures, np.zeros(self.temperatures.shape, dtype=float))
-        for i, cell in enumerate(self.grid.grid):
-            x, y = divmod(i, self.grid.width)
-            self.grid.grid[i].temperature = self.temperatures[x, y]
+        self.change_temperature()
+        
         if self.step_count >= self.max_steps:
             done = True
         
