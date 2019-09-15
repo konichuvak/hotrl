@@ -35,8 +35,11 @@ class Homie(WorldObj):
         self.cur_pos = self._place_within_the_room()
     
     def _place_within_the_room(self) -> xy_coord:
-        current_room = self.house.rooms[self.current_room]
-        return current_room[0]
+        if self.current_room == 'Outside':
+            return 0, 0
+        else:
+            room = self.house.rooms[self.house.room_names.index(self.current_room)]
+            return room.top[0] + 1, room.top[1] + 1
     
     def get_preferred_temperature(self, timestamp: datetime = None) -> int:
         """ Query homie for a preferred temperature at a current location,
@@ -310,7 +313,8 @@ class House(MiniGridEnv):
                 'Outside'   : 'grey'
             }
             x = info[homie]
-            del info[homie]
+            info_dict = info.copy()
+            del info_dict[homie]
             print(termcolor.colored(
                 text={**info, **x, 'action': self.action_names[action]},
                 color=colors[x['room']]
@@ -351,7 +355,7 @@ class MultiRoomHouse(MiniGridEnv):
                  t_start: float = 20,
                  start_dt: datetime = datetime.now(),
                  dt_delta: timedelta = timedelta(minutes=1),
-                 homies: List[Homie] = None,
+                 homies_params: List[Dict] = None,
                  homie_reward_scaler: float = 1,
                  room_names: List[str] = RoomType,
                  minNumRooms=5,
@@ -362,7 +366,6 @@ class MultiRoomHouse(MiniGridEnv):
 
         self.t_out = t_out
         self.t_start = t_start
-        self.homies = homies
         self.current_dt = start_dt
         self.timedelta = dt_delta
         self.homie_reward_scaler = homie_reward_scaler
@@ -385,6 +388,9 @@ class MultiRoomHouse(MiniGridEnv):
             max_steps=self.maxNumRooms * 20,
             seed=seed
         )
+        self.homies = [Homie(self, **params) for params in homies_params]
+        for homie in self.homies:
+            self.grid.set(*homie.cur_pos, v=homie)
 
     def _gen_grid(self, width, height):
         roomList = []
@@ -456,10 +462,6 @@ class MultiRoomHouse(MiniGridEnv):
 
                 prevRoom = roomList[idx - 1]
                 prevRoom.exitDoorPos = room.entryDoorPos
-
-        # Place tenants in the house
-        for homie in self.homies:
-            self.grid.set(*homie.cur_pos, v=homie)
 
         # Randomize the starting agent position and direction
         self.place_agent(roomList[0].top, roomList[0].size)
