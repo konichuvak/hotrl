@@ -1,6 +1,6 @@
 ## Inspiration
 
-As part of the AI for [Climate Change hackathon](https://github.com/ai-launchlab/ccai-hackathon-2019), we wanted to develop an application of reinforcement learning that could help households in Montreal reduce their carbon footprint. This wasn't obvious, since so much of our household energy is low-carbon electricity from hydropower. However, residential heating still predominantly relies on fossil fuels while accounting for the lion's share of Canadians' energy consumption: making it an ideal problem to tackle for this hackathon. So, we built a simple 2D heat transfer model to simulate houses in Montreal's winter, and trained a reinforcement learning agent to optimize heating schedules so as to reduce waste and maximize the comfort of simulated occupants with their own schedule and temperature preferences.
+As part of the AI for [Climate Change hackathon](https://github.com/ai-launchlab/ccai-hackathon-2019), we wanted to develop an application of reinforcement learning that could help households in Montreal reduce their carbon footprint. This wasn't obvious, since so much of our household energy is low-carbon electricity from hydropower. However, residential heating still predominantly relies on fossil fuels while accounting for the lion's share of Canadians' energy consumption: making it an ideal problem to tackle for this hackathon. So, w built a simple 2D heat transfer model to simulate houses in Montreal's winter, and trained a reinforcement learning agent to optimize heating schedules so as to reduce waste and maximize the comfort of simulated occupants with their own schedule and temperature preferences.
 
 # TODO: add stats on carbon emissions generated from heating in Canada.
 
@@ -9,10 +9,10 @@ We created an openai gym environment for our simulations, which models a procedu
 
 ### House
 Each cell represents a room in a 2-D grid. The cell can be occupied by one of the following objects:
-- `Homie` -- a person in the house
-- `Wall` -- a type of isolation that captures the heat 
-- `HeatingTile` -- a cell in the grid that can be targeted by the 
-- `Outdoors` -- a cell of the grid that can not be directly controlled by the system and assumes an outside temperature.
+- `Homie` a person in the house
+- `Wall` a type of isolation that captures the heat 
+- `HeatingTile` a cell in the grid that can be targeted by the 
+- `Outdoors` a cell of the grid that can not be directly controlled by the system and assumes an outside temperature.
 
 ![](assets/4rooms.gif)
 
