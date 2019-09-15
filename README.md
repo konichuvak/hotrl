@@ -39,6 +39,7 @@ In the future work, reward function will have to be revisited and the discomfort
 The library utilizes [RLlib](https://ray.readthedocs.io/en/latest/rllib.html) implementation of DQN with prioritized experience replay.
 State is efficiently represented as a nxnx2 grid, where the first 2 dimensions correspond to the grid size and the last dimension encodes object type and temperature.
 DQN was tested on a 4x4 `House` with starting temperature of 15 degrees and ambient temperature of 5. Maximizing the comfort of `Homie`s and minimizing costs for heating was successfully achieved with untuned DQN that ran for ~500 million examples.
+![](assets/learning_curves.png)
 
 
 # Heat Transfer Modeling
