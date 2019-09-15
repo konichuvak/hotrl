@@ -1,11 +1,8 @@
 ## Inspiration
-
-We wanted to apply reinforcement learning to tackle inefficiencies in heating systems. The idea of for the concept came while brainstorming for a Climate Change hackathon project.
-# TODO: add stats on carbon emissions generated from heating in Canada.
+As part of the AI for Climate Change hackathon {TODO: link}, we wanted to develop an application of reinforcement learning that could help households in Montreal reduce their carbon footprint. This wasn't obvious, since so much of our household energy is low-carbon electricity from hydropower. However, residential heating still predominantly relies on fossil fuels while accounting for the lion's share of Canadians' energy consumption: making it an ideal problem to tackle for this hackathon. So, w built a simple 2D heat transfer model to simulate houses in Montreal's winter, and trained a reinforcement learning agent to optimize heating schedules so as to reduce waste and maximize the comfort of simulated occupants with their own schedule and temperature preferences.
 
 ## Environments
-
-The environments are inherited from ![gym-minigrid](https://github.com/maximecb/gym-minigrid) library.
+We created an openai gym environment for our simulations, which models a procedurally generated house as a 2D grid world along with it's heat transfer dynamics and the behavior of its occupants. The environments are inherited from ![gym-minigrid](https://github.com/maximecb/gym-minigrid) library to facilitate visualizations.
 
 ### House
 Each cell represents a room in a 2-D grid. The cell can be occupied by one of the following objects:
