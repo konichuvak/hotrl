@@ -35,7 +35,13 @@ Discomfort of the `Homie` is calculated based on the squared deviation from the 
 In the future work, reward function will have to be revisited and the discomfort would have to be more precisely quantified via some utility function.
 
 
-# Temperature control
+# Heat Transfer Modeling
+We originally tried to model emissivity/conduction/convection individually, however we ended up using [RSI-values](https://en.wikipedia.org/wiki/R-value_(insulation)) to approximate the heat flow in and out of rooms while making some simplifying assumptions:  
+- The air in each room is perfectly mixed, leading to uniform temperatures;
+- Walls have an RSI value of 4.2, in line with government recommendations for houses in Montreal;
+- Outside temperatures act as a heat sink and do not change due to heat flow;
+- Variables such as the heat capacity of air and the RSI value of the walls do not change with temperature;
+- The instantaneous temperature differential across a wall is used to estimate the heat flow for the next 60s;
 
 
 # Real-World Applications
