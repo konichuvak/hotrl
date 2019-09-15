@@ -8,6 +8,7 @@ class SimpleModel:
                  air_capacity: float = 1005,
                  air_density: float = 1.204,
                  timestep: int = 60,
+                 round: int = 2,
                  ):
         """
         source for RSI:
@@ -24,6 +25,7 @@ class SimpleModel:
         assert(timestep <= 60), "timestep should be <= 60s to better " \
                                 "approximate heat transfer..."
         self.timestep = timestep
+        self.round = round
 
     def step(self, temperatures: np.ndarray, heat: np.ndarray):
         dT_y = temperatures[:, 1:] - temperatures[:, :-1]
@@ -39,7 +41,7 @@ class SimpleModel:
 
         temperatures[1:-1, 1:-1] += heat[1:-1, 1:-1] / self.air_capacity
         heat *= 0
-        return temperatures
+        return np.around(temperatures, self.round)
 
 if __name__ == '__main__':
     house_shape = (10,5)

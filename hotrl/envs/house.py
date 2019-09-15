@@ -6,6 +6,8 @@ import numpy as np
 from gym_minigrid.envs.empty import MiniGridEnv, OBJECT_TO_IDX, COLOR_TO_IDX, TEMPERATURES, COLORS
 from gym_minigrid.minigrid import WorldObj, CELL_PIXELS, Grid, Floor
 
+from hotrl.heat_transfer.model import SimpleModel
+
 xy_coord = Tuple[int, int]
 RoomType = ['Kitchen', 'Bathroom', 'Bedroom', 'LivingRoom', 'Outside']
 
@@ -123,6 +125,7 @@ class House(MiniGridEnv):
         self.homies = homies
         self.current_dt = start_dt
         self.timedelta = dt_delta
+        self.model = SimpleModel()
         super().__init__(
             grid_size=5,
             max_steps=1000,
@@ -175,8 +178,10 @@ class House(MiniGridEnv):
             rewards[homie] = homie.get_preferred_temperature(self.current_dt)
         
         # Adjust the temperature in the house wrt to the preferences of homies
-        # TODO (Andrei):
-        
+        self.temperatures = self.model.step(self.temperatures, np.zeros(self.temperatures.shape, dtype=float))
+        for i, cell in enumerate(self.grid.grid):
+            x, y = divmod(i, self.grid.width)
+            self.grid.grid[i].temperature = self.temperatures[x, y]
         if self.step_count >= self.max_steps:
             done = True
         

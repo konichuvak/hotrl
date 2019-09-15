@@ -63,7 +63,7 @@ DIR_TO_VEC = [
 ]
 
 # Map of temperatures to RGB values
-temp_range = np.arange(-30, 31, 1)
+temp_range = np.around(np.arange(-30, 31, 0.01), 2)
 colors = list(Color("blue").range_to(Color("red"), len(temp_range)))
 TEMPERATURES = dict(zip(temp_range, [np.array(c.rgb) * 255 for c in colors]))
 
