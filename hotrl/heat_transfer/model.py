@@ -49,15 +49,17 @@ class SimpleModel:
         heat *= 0
         return np.around(temperatures, self.round)
 
+
 class RoomModel:
     def __init__(self,
                  RSI: float = 4.2,
-                 wall_height: float = 3, # m
-                 wall_width: float = 10, # m
+                 wall_height: float = 2.5, # m
+                 wall_width: float = 1, # m
                  air_capacity: float = 1005, # J/(kg deg)
                  air_density: float = 1.204, # kg / m3
                  timestep: int = 60, # s
                  round: int = 2,
+                 heat_per_m2: float = 200.
                  ):
         """
         source for RSI:
@@ -75,6 +77,8 @@ class RoomModel:
                                 "approximate heat transfer..."
         self.timestep = timestep
         self.round = round
+        self.heat_per_m2 = heat_per_m2
+
 
     def step(self, rooms_data: Dict):
         # calculate heat flow Q into a room from an adjacent room, given:
@@ -84,17 +88,20 @@ class RoomModel:
         for room, data in rooms_data.items():
             T_room = data["T"]
             data["Q"] = 0
-            for adj_room in data["adj_rooms"]:
+            for adj_room, P in data["P"].items():
                 T_out = rooms_data[adj_room]["T"]
-                P = data["P"][adj_room]
-                data["Q"] += P * (T_out - T_room) * self.A_over_RSI
+                data["Q"] += P * (T_out - T_room) * self.A_over_RSI * self.timestep
+            data["Q"] += data["P_out"] * (data["T_out"] - T_room) * self.A_over_RSI * self.timestep
+            if data["heat"] == 1:
+                data["Q"] += self.heat_per_m2 * data["A"]
+                data["heat"] = 0
 
-        # update temperature for a room given:
-        #   Q: the
         for room, data in rooms_data.items():
-            data["T"] += data["Q"] / self.air_capacity / data["A"]
+            print(data["Q"], data["A"])
+            data["T"] += data["Q"] / self.air_capacity
+            data["T"] = np.round(data["T"], 2)
 
-        return np.around(temperatures, self.round)
+        return rooms_data
 
 if __name__ == '__main__':
     house_shape = (10,5)
