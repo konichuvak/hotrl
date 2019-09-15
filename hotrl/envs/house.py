@@ -3,7 +3,8 @@ from typing import Tuple, List
 
 import numpy as np
 
-from gym_minigrid.envs.empty import MiniGridEnv, OBJECT_TO_IDX, COLOR_TO_IDX, TEMPERATURES, COLORS
+from gym_minigrid.envs.empty import MiniGridEnv, OBJECT_TO_IDX, COLOR_TO_IDX, \
+    TEMPERATURES, COLORS
 from gym_minigrid.minigrid import WorldObj, CELL_PIXELS, Grid, Floor
 
 from hotrl.heat_transfer.model import SimpleModel
@@ -13,40 +14,42 @@ RoomType = ['Kitchen', 'Bathroom', 'Bedroom', 'LivingRoom', 'Outside']
 
 
 class HeatingTile(Floor):
-    
+
     def __init__(self, color='blue', temperature=20):
         super().__init__(color, temperature)
 
 
 class Homie(WorldObj):
-    
+
     def __init__(self,
                  initial_room: RoomType = 'Kitchen'):
         super(Homie, self).__init__('ball', color='blue')
         self.current_room = initial_room
         self.cur_pos = self._place_within_the_room()
-    
+
     def _place_within_the_room(self) -> xy_coord:
         current_room = House.rooms[self.current_room]
         return current_room[np.random.randint(0, len(current_room) - 1)]
-    
+
     def get_preferred_temperature(self, timestamp: datetime = None) -> int:
         """ Query homie for a preferred temperature at a current location,
         at a given time of the day or season"""
-        
+
         if self.current_room == 'Kitchen':
-            temp = 20
+            temp = 20, 25
         elif self.current_room == 'Bathroom':
-            temp = 22
+            temp = 22,24
         elif self.current_room == 'Bedroom':
-            temp = 18
+            temp = 18,20
         elif self.current_room == 'LivingRoom':
-            temp = 19
+            temp = 19,24
+        elif self.current_room == 'Outside':
+            temp = -30,30
         else:
             raise ValueError('Undefined room type')
-        
+
         return temp
-    
+
     def step(self, timestamp: datetime) -> RoomType:
         date = dict(
             year=timestamp.year,
@@ -59,7 +62,7 @@ class Homie(WorldObj):
             month=prev_date.month,
             day=prev_date.day
         )
-        
+
         sleep = datetime(**dict(**prev_date, hour=22))
         morning_bath = datetime(**dict(**date, hour=7))
         breakfast = datetime(**dict(**date, hour=7, minute=30))
@@ -67,7 +70,7 @@ class Homie(WorldObj):
         dinner = datetime(**dict(**date, hour=18))
         study = datetime(**dict(**date, hour=19))
         evening_bath = datetime(**dict(**date, hour=21, minute=30))
-        
+
         if sleep <= timestamp < morning_bath:
             self.current_room = 'Bedroom'
         elif morning_bath <= timestamp < breakfast:
@@ -82,9 +85,9 @@ class Homie(WorldObj):
             self.current_room = 'LivingRoom'
         elif evening_bath <= evening_bath < sleep:
             self.current_room = 'Bathroom'
-            
+
         self.cur_pos = self._place_within_the_room()
-    
+
     def render(self, r, temperature: bool = False):
         if not temperature:
             self._set_color(r, temperature)
@@ -105,15 +108,15 @@ class HouseGrid(Grid):
     """
     A grid-world house with tenants and temperatures for each cell
     """
-    
+
     def encode(self, vis_mask=None):
         """
         Produce a compact numpy encoding of the grid
         """
-        
+
         if vis_mask is None:
             vis_mask = np.ones((self.width, self.height), dtype=bool)
-        
+
         array = np.zeros((self.width, self.height, 3), dtype='int8')
         for i in range(self.width):
             for j in range(self.height):
@@ -128,7 +131,7 @@ class HouseGrid(Grid):
                         array[i, j, 0] = OBJECT_TO_IDX[v.type]
                         array[i, j, 1] = COLOR_TO_IDX[v.color]
                         array[i, j, 2] = v.temperature
-        
+
         return array
 
 
@@ -141,47 +144,51 @@ class House(MiniGridEnv):
         (1, 3): 'LivingRoom',
     }
     rooms = {
-        'Kitchen'   : [(2, 3), (3, 3)],
-        'Bathroom'  : [(2, 1), (2, 2)],
-        'Bedroom'   : [(3, 1), (3, 2)],
+        'Kitchen': [(2, 3), (3, 3)],
+        'Bathroom': [(2, 1), (2, 2)],
+        'Bedroom': [(3, 1), (3, 2)],
         'LivingRoom': [(1, 1), (1, 2), (1, 3)],
-        'Outside': [(0, 0)],
+        'Outside': [(0, 0), (0,1)],
     }
-    
+
     def __init__(
-        self,
-        temperatures: np.ndarray,
-        size: int = 5,
-        start_dt: datetime = datetime.now(),
-        dt_delta: timedelta = timedelta(minutes=1),
-        homies: List[Homie] = None,
+            self,
+            temperatures: np.ndarray,
+            size: int = 5, # TODO vlad
+            start_dt: datetime = datetime.now(),
+            dt_delta: timedelta = timedelta(minutes=1),
+            homies: List[Homie] = None,
+            homie_reward_scaler: float = 1,
+            action_threshold: float = 0.5,
     ):
         self.temperatures = temperatures
         self.homies = homies
         self.current_dt = start_dt
         self.timedelta = dt_delta
+        self.homie_reward_scaler = homie_reward_scaler
+        self.action_threshold = action_threshold
         self.model = SimpleModel()
         super().__init__(
             grid_size=5,
             max_steps=1000,
             see_through_walls=True,
         )
-    
+
     def _gen_grid(self, width, height):
         assert width == height
-        
+
         # Create an empty grid
         self.grid = HouseGrid(width, height)
-        
+
         # Generate walls
         self.grid.wall_rect(0, 0, width, height)
-        
+
         # Place tenants in the house
         for homie in self.homies:
             self.grid.set(*homie.cur_pos, v=homie)
-        
+
         self.place_agent()
-        
+
         # Place the heating tiles in the house
         for i, cell in enumerate(self.grid.grid):
             x, y = divmod(i, width)
@@ -190,9 +197,9 @@ class House(MiniGridEnv):
                     temperature=self.temperatures[x, y]
                 )
             self.grid.grid[i].temperature = self.temperatures[x, y]
-        
+
         self.mission = "it's getting hot in here"
-    
+
     def change_temperature(self, heatmap: np.ndarray = None):
         """ Changes the temperature of each object in the house """
         if heatmap is None:
@@ -204,30 +211,45 @@ class House(MiniGridEnv):
         for i, cell in enumerate(self.grid.grid):
             x, y = divmod(i, self.grid.width)
             self.grid.grid[i].temperature = self.temperatures[x, y]
-    
+
     def step(self, action):
         self.current_dt += self.timedelta
         self.step_count += 1
-        
+
+        # action[action >= self.action_threshold] = 1
+        # action[action < self.action_threshold] = 0
+
         reward = 0
         done = False
-        
+
         # Move each homie and determine their preference for the temperature
-        rewards = dict()
+        homie_info = dict()
         for homie in self.homies:
+            homie_info[homie] = {}
+            homie_info[homie]["room"] = homie.current_room
+            homie_info[homie]["dt"] = self.current_dt
+            homie_info[homie]["temperature"] = self.temperatures[self.rooms[homie.current_room][0]]
+            homie_info[homie]["comfort"] = homie.get_preferred_temperature(self.current_dt)
+            if not homie_info[homie]["comfort"][0] <= \
+                   homie_info[homie]["temperature"] <= \
+                   homie_info[homie]["comfort"][1]:
+                reward += -(min(abs(homie_info[homie]["temperature"]
+                                   - homie_info[homie]["comfort"][0]),
+                               abs(homie_info[homie]["temperature"]
+                                   - homie_info[homie]["comfort"][1]))
+                            * self.homie_reward_scaler)
+
             homie.step(timestamp=self.current_dt)
-            rewards[homie] = homie.get_preferred_temperature(self.current_dt)
-        print(self.current_dt, rewards, homie.current_room)
 
         # Adjust the temperature in the house wrt to the preferences of homies
-        self.change_temperature()
-        
+        self.change_temperature(action)
+
         if self.step_count >= self.max_steps:
             done = True
-        
+
         obs = self.gen_obs()
-        
+
         # Remove the agent from the observation
         obs['image'][:, :, 0][obs['image'][:, :, 0] == 10] = 1
-        
-        return obs, reward, done, {}
+
+        return obs, reward, done, homie_info
