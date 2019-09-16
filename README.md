@@ -4,7 +4,7 @@ As part of the AI for [Climate Change hackathon](https://github.com/ai-launchlab
 
 #### [Residential Energy Use in Canada](https://www.nrcan.gc.ca/energy-and-greenhouse-gas-emissions-ghgs/20063#L1)
 
-<img src="https://www.nrcan.gc.ca/sites/www.nrcan.gc.ca/files/energy/energy_fact/residential-appliance-2016_2019.png" width="400" height="300"> <img src="https://www.nrcan.gc.ca/sites/www.nrcan.gc.ca/files/energy/energy_fact/space-heating-2016_2019.png" width="400" height="300">
+<img src="https://www.nrcan.gc.ca/sites/www.nrcan.gc.ca/files/energy/energy_fact/residential-appliance-2016_2019.png" width="420" height="280"> <img src="https://www.nrcan.gc.ca/sites/www.nrcan.gc.ca/files/energy/energy_fact/space-heating-2016_2019.png" width="400" height="300">
 
 # Environments
 We created an openai gym environment for our simulations, which models a procedurally generated house as a 2D grid world along with it's heat transfer dynamics and the behavior of its occupants. The environments are inherited from [gym-minigrid](https://github.com/maximecb/gym-minigrid) library to facilitate visualizations.
