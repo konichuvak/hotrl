@@ -2,9 +2,11 @@ import time
 from collections import defaultdict
 from functools import partial
 from multiprocessing import cpu_count
-
+import numpy as np
 import ray.rllib.optimizers as optimizers
+from ray.rllib import Policy
 from ray.rllib.agents.dqn import DQNTrainer
+from ray.rllib.agents.trainer_template import build_trainer
 from ray.tune.logger import pretty_print
 
 from hotrl.rllib_experiments.CustomSyncReplayOptimizer import CustomSyncReplayOptimizer
@@ -24,7 +26,7 @@ def dqn_train(config, reporter):
         # "train_batch_size"          : 128,
         # "learning_starts"           : 5000,
         # "target_network_update_freq": 5000,
-        "timesteps_per_iteration"   : 100,
+        "timesteps_per_iteration"   : 1000,
         # "num_workers"               : cpu_count(),
         # "per_worker_exploration"    : True,
         # "worker_side_prioritization": True,
@@ -50,7 +52,7 @@ def dqn_train(config, reporter):
         # Do optimization steps
         start = time.time()
         extra_metrics = defaultdict(lambda: defaultdict(list))
-        metrics = ['extreme_penalty', 'comfort_penalty', 'cost']
+        metrics = ['comfort_penalty', 'cost']
         metrics += [f'{r}_temperature' for r in self.local_evaluator.env.rooms]
         while (
             self.global_timestep - start_timestep <
@@ -92,3 +94,56 @@ def dqn_train(config, reporter):
         result = trainer.train()  # Executes one training step
         # print(pretty_print(result))
         reporter(**result)  # notifies TrialRunner
+
+
+class MaintenancePolicy(Policy):
+    """ Maintains constant temperature in the house at all times """
+
+    def __init__(self, observation_space, action_space, config):
+        Policy.__init__(self, observation_space, action_space, config)
+    
+    def compute_actions(self,
+                        obs_batch,
+                        state_batches,
+                        prev_action_batch=None,
+                        prev_reward_batch=None,
+                        info_batch=None,
+                        episodes=None,
+                        **kwargs):
+        """ Heat up the room when the temperature is below threshold """
+        maint_temp = 20
+        actions = list()
+        
+        for obs in obs_batch:
+            temp_map = obs[:, :, 1]
+            min_temp_inside = temp_map[1:-1, 1:-1].min()
+            action = np.zeros(self.action_space.shape)
+            if min_temp_inside < maint_temp:
+                min = np.where(temp_map == min_temp_inside)
+                xy = list(zip(*min))
+                idx = np.random.randint(0, len(xy)) if len(xy) > 1 else 0
+                action[xy[idx]] = 1
+            actions.append(action.T)
+            
+        return actions, [], {}
+    
+    def learn_on_batch(self, samples):
+        return {}  # return stats
+    
+    def get_weights(self):
+        return {}
+    
+    def set_weights(self, weights):
+        pass
+    
+    def compute_gradients(self, postprocessed_batch):
+        pass
+
+    def apply_gradients(self, gradients):
+        pass
+
+    def export_model(self, export_dir):
+        pass
+
+    def export_checkpoint(self, export_dir):
+        pass

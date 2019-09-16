@@ -6,6 +6,8 @@ class HouseLogger(TFLogger):
     
     def on_result(self, result):
         tmp = result.copy()
+        if not tmp.get('extra_metrics'):
+            tmp['extra_metrics'] = {}
         for metric, values in tmp['extra_metrics'].items():
             if 'temperature' in metric:
                 values = np.array(values.popitem()[1])

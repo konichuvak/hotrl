@@ -9,7 +9,7 @@ class SimpleModel:
                  air_capacity: float = 1005, # J/(kg deg)
                  air_density: float = 1.204, # kg / m3
                  timestep: int = 60, # s
-                 heater_output: float = 2000, # W
+                 heater_output: float = 1000, # W
                  round: int = 2,
                  ):
         """
